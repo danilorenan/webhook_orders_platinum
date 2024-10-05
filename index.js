@@ -77,7 +77,7 @@ async function getPedidosExistentes() {
 // 5. Função para preencher o Google Sheets com novos pedidos
 async function preencherGoogleSheets(pedidos) {
     const client = await auth.getClient();
-    const spreadsheetId = '1xgfmLNUuahh4PDm6rQb7wCM6GO6sZZaSRiSpQzFtTEw'; // ID da planilha do Google Sheets
+    const spreadsheetId = '1EwWKubnC0M8No3AWEgppGDgs7cuKAG6sEMnLqkxEluk'; // ID da planilha do Google Sheets
     const range = 'Pedidos Platinum!A2'; // Intervalo onde os dados serão inseridos
 
     const idsExistentes = await getPedidosExistentes();
