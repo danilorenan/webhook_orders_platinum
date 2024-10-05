@@ -54,7 +54,7 @@ async function fetchTodosPedidos() {
 // 4. Função para obter os IDs já presentes na planilha
 async function getPedidosExistentes() {
     const client = await auth.getClient();
-    const spreadsheetId = '1xgfmLNUuahh4PDm6rQb7wCM6GO6sZZaSRiSpQzFtTEw'; // ID da planilha do Google Sheets
+    const spreadsheetId = '1EwWKubnC0M8No3AWEgppGDgs7cuKAG6sEMnLqkxEluk'; // ID da planilha do Google Sheets
     const range = 'Pedidos Platinum!A2:A'; // Intervalo onde os IDs estão
 
     try {
