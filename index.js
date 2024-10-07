@@ -34,6 +34,7 @@ async function fetchTodosPedidos() {
                     dataHoraFim: moment().endOf('month').toISOString(),      // Pegar o fim do mês
                     limite: 100,  // Limite por página
                     origem: 1,
+                    origem: 3,
                     pagina: page  // Página atual
                 }
             });
