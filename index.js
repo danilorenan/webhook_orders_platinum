@@ -52,11 +52,11 @@ async function fetchTodosPedidos() {
     return pedidos;
 }
 
-// 4. Função para obter os IDs já presentes na planilha
-async function getPedidosExistentes() {
+// 4. Função para obter os IDs e situações já presentes na planilha
+async function getPedidosExistentesComSituacao() {
     const client = await auth.getClient();
     const spreadsheetId = '1EwWKubnC0M8No3AWEgppGDgs7cuKAG6sEMnLqkxEluk'; // ID da planilha do Google Sheets
-    const range = 'Pedidos Platinum!A2:A'; // Intervalo onde os IDs estão
+    const range = 'Pedidos Platinum!A2:N'; // Intervalo onde os IDs e situações estão
 
     try {
         const response = await sheets.spreadsheets.values.get({
@@ -66,25 +66,82 @@ async function getPedidosExistentes() {
         });
 
         const rows = response.data.values || [];
-        const idsExistentes = rows.map(row => row[0]); // Pegar os IDs da primeira coluna
-        return idsExistentes;
+        const pedidosExistentes = rows.map(row => ({
+            id: row[0],             // ID do pedido
+            situacao: row[12],      // Situação do pedido
+            rowNumber: rows.indexOf(row) + 2 // Posição da linha na planilha (A2 seria 2)
+        }));
+        return pedidosExistentes;
 
     } catch (error) {
-        console.error('Erro ao buscar IDs existentes na planilha:', error);
+        console.error('Erro ao buscar IDs e situações existentes na planilha:', error);
         return [];
     }
 }
 
-// 5. Função para preencher o Google Sheets com novos pedidos
+// 5. Função para atualizar situações alteradas no Google Sheets
+async function atualizarSituacoes(pedidosAlterados) {
+    const client = await auth.getClient();
+    const spreadsheetId = '1EwWKubnC0M8No3AWEgppGDgs7cuKAG6sEMnLqkxEluk'; // ID da planilha do Google Sheets
+
+    const requests = pedidosAlterados.map(pedido => ({
+        range: `Pedidos Platinum!M${pedido.rowNumber}`,  // Coluna M onde está a situação
+        values: [[pedido.novaSituacao]]  // A nova situação do pedido
+    }));
+
+    const data = requests.map(req => ({ range: req.range, values: req.values }));
+
+    try {
+        const response = await sheets.spreadsheets.values.batchUpdate({
+            auth: client,
+            spreadsheetId: spreadsheetId,
+            resource: {
+                data: data,
+                valueInputOption: 'USER_ENTERED'
+            }
+        });
+        console.log(`${response.data.totalUpdatedCells} células de situação atualizadas com sucesso.`);
+    } catch (error) {
+        console.error('Erro ao atualizar situações no Google Sheets:', error);
+    }
+}
+
+// 6. Função para verificar se houve mudança de situação dos pedidos
+async function verificarMudancasDeSituacao(pedidosExistentes) {
+    // Busca todos os pedidos da API novamente para verificar mudanças
+    const pedidosAtuais = await fetchTodosPedidos();
+
+    // Verifica quais pedidos tiveram mudança de situação
+    const pedidosAlterados = pedidosExistentes.reduce((alterados, pedidoExistente) => {
+        const pedidoAtual = pedidosAtuais.find(pedido => pedido.id.toString() === pedidoExistente.id);
+        if (pedidoAtual && pedidoAtual.situacaoNome !== pedidoExistente.situacao) {
+            alterados.push({
+                id: pedidoAtual.id,
+                novaSituacao: pedidoAtual.situacaoNome,
+                rowNumber: pedidoExistente.rowNumber // Localiza a linha do pedido na planilha
+            });
+        }
+        return alterados;
+    }, []);
+
+    // Atualiza apenas os pedidos que tiveram mudança de situação
+    if (pedidosAlterados.length > 0) {
+        await atualizarSituacoes(pedidosAlterados);
+    } else {
+        console.log('Nenhuma situação de pedido foi alterada.');
+    }
+}
+
+// 7. Função para preencher o Google Sheets com novos pedidos
 async function preencherGoogleSheets(pedidos) {
     const client = await auth.getClient();
     const spreadsheetId = '1EwWKubnC0M8No3AWEgppGDgs7cuKAG6sEMnLqkxEluk'; // ID da planilha do Google Sheets
     const range = 'Pedidos Platinum!A2'; // Intervalo onde os dados serão inseridos
 
-    const idsExistentes = await getPedidosExistentes();
+    const idsExistentes = await getPedidosExistentesComSituacao();
 
     // Filtrar pedidos que ainda não estão na planilha
-    const novosPedidos = pedidos.filter(pedido => !idsExistentes.includes(pedido.id.toString()));
+    const novosPedidos = pedidos.filter(pedido => !idsExistentes.some(existente => existente.id === pedido.id.toString()));
 
     if (novosPedidos.length === 0) {
         console.log('Nenhum pedido novo encontrado.');
@@ -127,7 +184,7 @@ async function preencherGoogleSheets(pedidos) {
     }
 }
 
-// 6. Função principal para executar o processo
+// 8. Função principal para executar o processo
 async function executar() {
     console.log('Iniciando busca por novos pedidos...');
 
@@ -139,9 +196,13 @@ async function executar() {
     } else {
         console.log('Nenhum pedido encontrado.');
     }
+
+    // Verifica se há mudanças de situação nos pedidos já existentes
+    const pedidosExistentes = await getPedidosExistentesComSituacao();
+    await verificarMudancasDeSituacao(pedidosExistentes);
 }
 
-// 7. Executa o processo a cada 1 minuto
+// 9. Executa o processo a cada 1 minuto
 setInterval(() => {
     executar();
 }, 60000); // 60.000ms = 1 minuto
