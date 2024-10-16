@@ -202,7 +202,7 @@ async function executar() {
     await verificarMudancasDeSituacao(pedidosExistentes);
 }
 
-// 9. Executa o processo a cada 1 minuto
+// 9. Executa o processo a cada 30 minutos (1.800.000 ms)
 setInterval(() => {
     executar();
-}, 60000); // 60.000ms = 1 minuto
+}, 1800000); // 30 minutos
