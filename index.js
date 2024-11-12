@@ -4,12 +4,12 @@ const moment = require('moment');
 
 // Configuração da conexão com o SQL Server
 const config = {
-    user: 'sa',
-    password: 'Galaxyy123.',
-    server: 'localhost',
-    database: 'PedidosPlatinum',
+    user: 'sa',                  // Usuário do SQL Server
+    password: 'Galaxyy123.',      // Senha do SQL Server
+    server: 'localhost',          // Servidor (localhost na VPS)
+    database: 'PedidosPlatinum',  // Nome do banco de dados
     options: {
-        encrypt: false,
+        encrypt: false,           // Desativado, já que não estamos usando SSL localmente
         enableArithAbort: true
     }
 };
@@ -17,6 +17,10 @@ const config = {
 // 1. Configurações da API Platinum Kids
 const username = 'AganciaToff';
 const password = 'b92a1b5ba71db20fc82a0ce75ff994ce8e1ff434';
+const encodedAuthString = Buffer.from(`${username}:${password}`).toString('base64');
+const url = 'https://api.platinumkids.com.br/loja/v1/pedido';
+
+let ultimaBusca = moment().startOf('month'); // Inicialmente, busca desde o início do mês
 
 // 2. Função para conectar ao banco de dados
 async function connectToDatabase() {
@@ -28,45 +32,59 @@ async function connectToDatabase() {
     }
 }
 
-// 3. Função para buscar todos os pedidos da API Platinum Kids
-async function fetchTodosPedidos() {
-    let pedidos = [];
-    let page = 1;
-    let hasMore = true;
-    const encodedAuthString = Buffer.from(`${username}:${password}`).toString('base64');
-    const url = 'https://api.platinumkids.com.br/loja/v1/pedido';
-
-    while (hasMore) {
+// 3. Função para buscar pedidos com retry e backoff exponencial
+async function fetchPedidosComRetry(params, retries = 3, backoff = 1000) {
+    for (let i = 0; i < retries; i++) {
         try {
             const response = await axios.get(url, {
                 headers: {
                     'Authorization': `Basic ${encodedAuthString}`,
                     'Accept-Encoding': 'gzip'
                 },
-                params: {
-                    dataHoraInicio: moment().startOf('month').toISOString(),
-                    dataHoraFim: moment().endOf('month').toISOString(),
-                    limite: 100,
-                    origem: 1,
-                    pagina: page
-                }
+                params: params
             });
-
-            const data = response.data.data;
-            pedidos = pedidos.concat(data);
-            page++;
-            hasMore = page <= response.data.pagina_total;
-
+            return response.data.data;
         } catch (error) {
-            console.error('Erro ao buscar pedidos:', error);
+            if (i === retries - 1) {
+                console.error('Falha na requisição após múltiplas tentativas:', error);
+                throw error;
+            }
+            console.warn(`Erro na tentativa ${i + 1}, esperando para tentar novamente...`);
+            await new Promise(resolve => setTimeout(resolve, backoff * Math.pow(2, i))); // Exponential backoff
+        }
+    }
+}
+
+// 4. Função para buscar pedidos incrementais desde a última execução
+async function fetchNovosPedidos() {
+    let pedidos = [];
+    let page = 1;
+    let hasMore = true;
+
+    const params = {
+        dataHoraInicio: ultimaBusca.toISOString(),
+        dataHoraFim: moment().toISOString(),
+        limite: 100,
+        origem: 1,
+    };
+
+    while (hasMore) {
+        params.pagina = page;
+        const novosPedidos = await fetchPedidosComRetry(params);
+        pedidos = pedidos.concat(novosPedidos);
+        page++;
+        hasMore = page <= novosPedidos.pagina_total; // Verifica se há mais páginas
+
+        if (pedidos.length >= 1000) { // Limita a quantidade de dados por vez
             break;
         }
     }
 
+    ultimaBusca = moment(); // Atualiza o timestamp da última busca
     return pedidos;
 }
 
-// 4. Função para inserir ou atualizar pedidos no banco de dados
+// 5. Função para inserir ou atualizar pedidos no banco de dados
 async function inserirOuAtualizarPedidos(pedidos) {
     for (const pedido of pedidos) {
         try {
@@ -105,21 +123,25 @@ async function inserirOuAtualizarPedidos(pedidos) {
     }
 }
 
-// 5. Função principal para buscar e atualizar pedidos
+// 6. Função principal para buscar e atualizar pedidos
 async function executar() {
     console.log('Iniciando busca por novos pedidos...');
-    const pedidos = await fetchTodosPedidos();
+    try {
+        const pedidos = await fetchNovosPedidos();
 
-    if (pedidos.length > 0) {
-        await inserirOuAtualizarPedidos(pedidos);
-        console.log('Pedidos inseridos/atualizados com sucesso.');
-    } else {
-        console.log('Nenhum pedido encontrado.');
+        if (pedidos.length > 0) {
+            await inserirOuAtualizarPedidos(pedidos);
+            console.log(`${pedidos.length} pedidos inseridos/atualizados com sucesso.`);
+        } else {
+            console.log('Nenhum pedido novo encontrado.');
+        }
+    } catch (error) {
+        console.error('Erro durante a execução:', error);
     }
 }
 
 // Iniciar o processo
 connectToDatabase().then(() => {
-    executar(); // Executa uma vez ao iniciar
+    executar(); // Executa imediatamente
     setInterval(executar, 1800000); // Executa a cada 30 minutos
 });
