@@ -4,12 +4,12 @@ const moment = require('moment');
 
 // Configuração da conexão com o SQL Server
 const config = {
-    user: 'sa',                  // Usuário do SQL Server
-    password: 'Galaxyy123.',       // Senha do SQL Server
-    server: 'localhost',         // Servidor (localhost na VPS)
-    database: 'PedidosPlatinum', // Nome do banco de dados
+    user: 'sa',
+    password: 'Galaxyy123.',
+    server: 'localhost',
+    database: 'PedidosPlatinum',
     options: {
-        encrypt: false,          // Desativado, já que não estamos usando SSL localmente
+        encrypt: false,
         enableArithAbort: true
     }
 };
@@ -28,7 +28,45 @@ async function connectToDatabase() {
     }
 }
 
-// 3. Função para inserir ou atualizar pedidos no banco de dados
+// 3. Função para buscar todos os pedidos da API Platinum Kids
+async function fetchTodosPedidos() {
+    let pedidos = [];
+    let page = 1;
+    let hasMore = true;
+    const encodedAuthString = Buffer.from(`${username}:${password}`).toString('base64');
+    const url = 'https://api.platinumkids.com.br/loja/v1/pedido';
+
+    while (hasMore) {
+        try {
+            const response = await axios.get(url, {
+                headers: {
+                    'Authorization': `Basic ${encodedAuthString}`,
+                    'Accept-Encoding': 'gzip'
+                },
+                params: {
+                    dataHoraInicio: moment().startOf('month').toISOString(),
+                    dataHoraFim: moment().endOf('month').toISOString(),
+                    limite: 100,
+                    origem: 1,
+                    pagina: page
+                }
+            });
+
+            const data = response.data.data;
+            pedidos = pedidos.concat(data);
+            page++;
+            hasMore = page <= response.data.pagina_total;
+
+        } catch (error) {
+            console.error('Erro ao buscar pedidos:', error);
+            break;
+        }
+    }
+
+    return pedidos;
+}
+
+// 4. Função para inserir ou atualizar pedidos no banco de dados
 async function inserirOuAtualizarPedidos(pedidos) {
     for (const pedido of pedidos) {
         try {
@@ -67,51 +105,14 @@ async function inserirOuAtualizarPedidos(pedidos) {
     }
 }
 
-// Função para buscar todos os pedidos da API Platinum Kids
-async function fetchTodosPedidos() {
-    let pedidos = [];
-    let page = 1;
-    let hasMore = true;
-    const encodedAuthString = Buffer.from(`${username}:${password}`).toString('base64');
-    const url = 'https://api.platinumkids.com.br/loja/v1/pedido';
-
-    while (hasMore) {
-        try {
-            const response = await axios.get(url, {
-                headers: {
-                    'Authorization': `Basic ${encodedAuthString}`,
-                    'Accept-Encoding': 'gzip'
-                },
-                params: {
-                    dataHoraInicio: moment().startOf('month').toISOString(), // Início do mês
-                    dataHoraFim: moment().endOf('month').toISOString(),      // Fim do mês
-                    limite: 100,  // Limite por página
-                    origem: 1,
-                    pagina: page  // Página atual
-                }
-            });
-
-            const data = response.data.data;
-            pedidos = pedidos.concat(data);
-            page++;
-            hasMore = page <= response.data.pagina_total;
-
-        } catch (error) {
-            console.error('Erro ao buscar pedidos:', error);
-            break;
-        }
-    }
-
-    return pedidos;
-}
-
-// 4. Função principal para buscar e atualizar pedidos
+// 5. Função principal para buscar e atualizar pedidos
 async function executar() {
     console.log('Iniciando busca por novos pedidos...');
     const pedidos = await fetchTodosPedidos();
 
     if (pedidos.length > 0) {
         await inserirOuAtualizarPedidos(pedidos);
+        console.log('Pedidos inseridos/atualizados com sucesso.');
     } else {
         console.log('Nenhum pedido encontrado.');
     }
@@ -119,6 +120,6 @@ async function executar() {
 
 // Iniciar o processo
 connectToDatabase().then(() => {
-    executar();
-    //setInterval(executar, 1800000); // Executa a cada 30 minutos
+    executar(); // Executa uma vez ao iniciar
+    setInterval(executar, 1800000); // Executa a cada 30 minutos
 });
