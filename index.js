@@ -67,6 +67,44 @@ async function inserirOuAtualizarPedidos(pedidos) {
     }
 }
 
+// Função para buscar todos os pedidos da API Platinum Kids
+async function fetchTodosPedidos() {
+    let pedidos = [];
+    let page = 1;
+    let hasMore = true;
+    const encodedAuthString = Buffer.from(`${username}:${password}`).toString('base64');
+    const url = 'https://api.platinumkids.com.br/loja/v1/pedido';
+
+    while (hasMore) {
+        try {
+            const response = await axios.get(url, {
+                headers: {
+                    'Authorization': `Basic ${encodedAuthString}`,
+                    'Accept-Encoding': 'gzip'
+                },
+                params: {
+                    dataHoraInicio: moment().startOf('month').toISOString(), // Início do mês
+                    dataHoraFim: moment().endOf('month').toISOString(),      // Fim do mês
+                    limite: 100,  // Limite por página
+                    origem: 1,
+                    pagina: page  // Página atual
+                }
+            });
+
+            const data = response.data.data;
+            pedidos = pedidos.concat(data);
+            page++;
+            hasMore = page <= response.data.pagina_total;
+
+        } catch (error) {
+            console.error('Erro ao buscar pedidos:', error);
+            break;
+        }
+    }
+
+    return pedidos;
+}
+
 // 4. Função principal para buscar e atualizar pedidos
 async function executar() {
     console.log('Iniciando busca por novos pedidos...');
