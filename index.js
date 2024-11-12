@@ -81,5 +81,6 @@ async function executar() {
 
 // Iniciar o processo
 connectToDatabase().then(() => {
-    setInterval(executar, 1800000); // Executa a cada 30 minutos
+    executar();
+    //setInterval(executar, 1800000); // Executa a cada 30 minutos
 });
