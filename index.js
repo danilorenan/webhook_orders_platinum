@@ -128,6 +128,9 @@ async function executar() {
     console.log('Iniciando busca por novos pedidos...');
     try {
         const pedidos = await fetchNovosPedidos();
+        
+        // Adicionando log para verificar os dados recebidos
+        console.log(`Pedidos recebidos: ${JSON.stringify(pedidos, null, 2)}`);
 
         if (pedidos.length > 0) {
             await inserirOuAtualizarPedidos(pedidos);
