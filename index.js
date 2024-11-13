@@ -20,7 +20,7 @@ const password = 'b92a1b5ba71db20fc82a0ce75ff994ce8e1ff434';
 const encodedAuthString = Buffer.from(`${username}:${password}`).toString('base64');
 const url = 'https://api.platinumkids.com.br/loja/v1/pedido';
 
-let ultimaBusca = moment().startOf('month'); // Inicialmente, busca desde o início do mês
+let ultimaBusca = moment().startOf('month'); // Inicialmente, busca desde o início do mês atual
 let primeiraExecucao = true; // Variável para identificar a primeira execução
 
 // Função para conectar ao banco de dados
@@ -56,15 +56,19 @@ async function fetchPedidosComRetry(params, retries = 3, backoff = 1000) {
     }
 }
 
-// Função para buscar pedidos incrementais desde a última execução
+// Função para buscar pedidos do mês atual, e a partir da última execução após a primeira execução
 async function fetchNovosPedidos() {
     let pedidos = [];
     let page = 1;
     let hasMore = true;
 
+    // Definir data de início e fim de acordo com a primeira execução ou execução incremental
+    const dataHoraInicio = primeiraExecucao ? moment().startOf('month').toISOString() : ultimaBusca.toISOString();
+    const dataHoraFim = moment().toISOString();
+
     const params = {
-        dataHoraInicio: primeiraExecucao ? '2000-01-01T00:00:00Z' : ultimaBusca.toISOString(),
-        dataHoraFim: moment().toISOString(),
+        dataHoraInicio: dataHoraInicio,
+        dataHoraFim: dataHoraFim,
         limite: 100,
         origem: 1,
     };
