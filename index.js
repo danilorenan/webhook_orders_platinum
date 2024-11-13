@@ -56,19 +56,15 @@ async function fetchPedidosComRetry(params, retries = 3, backoff = 1000) {
     }
 }
 
-// Função para buscar pedidos do mês atual, e a partir da última execução após a primeira execução
+// Função para buscar todos os pedidos disponíveis na primeira execução, e pedidos incrementais posteriormente
 async function fetchNovosPedidos() {
     let pedidos = [];
     let page = 1;
     let hasMore = true;
 
-    // Definir data de início e fim de acordo com a primeira execução ou execução incremental
-    const dataHoraInicio = primeiraExecucao ? moment().startOf('month').toISOString() : ultimaBusca.toISOString();
-    const dataHoraFim = moment().toISOString();
-
     const params = {
-        dataHoraInicio: dataHoraInicio,
-        dataHoraFim: dataHoraFim,
+        dataHoraInicio: primeiraExecucao ? moment().startOf('month').toISOString() : ultimaBusca.toISOString(),
+        dataHoraFim: moment().toISOString(),
         limite: 100,
         origem: 1,
     };
@@ -80,7 +76,7 @@ async function fetchNovosPedidos() {
         page++;
         hasMore = page <= novosPedidos.pagina_total; // Verifica se há mais páginas
 
-        if (pedidos.length >= 1000) { // Limita a quantidade de dados por vez
+        if (!primeiraExecucao && pedidos.length >= 1000) { // Limita a quantidade de dados por vez, exceto na primeira execução
             break;
         }
     }
@@ -153,7 +149,7 @@ async function executar() {
 }
 
 // Iniciar o processo
-connectToDatabase().then(() => {
-    executar(); // Executa imediatamente
-    setInterval(executar, 1800000); // Executa a cada 30 minutos
+connectToDatabase().then(async () => {
+    await executar(); // Executa imediatamente
+    setInterval(executar, 1800000); // Executa a cada 30 minutos após a primeira execução
 });
