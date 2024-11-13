@@ -21,6 +21,7 @@ const encodedAuthString = Buffer.from(`${username}:${password}`).toString('base6
 const url = 'https://api.platinumkids.com.br/loja/v1/pedido';
 
 let ultimaBusca = moment().startOf('month'); // Inicialmente, busca desde o início do mês
+let primeiraExecucao = true; // Variável para identificar a primeira execução
 
 // Função para conectar ao banco de dados
 async function connectToDatabase() {
@@ -62,7 +63,7 @@ async function fetchNovosPedidos() {
     let hasMore = true;
 
     const params = {
-        dataHoraInicio: ultimaBusca.toISOString(),
+        dataHoraInicio: primeiraExecucao ? '2000-01-01T00:00:00Z' : ultimaBusca.toISOString(),
         dataHoraFim: moment().toISOString(),
         limite: 100,
         origem: 1,
@@ -81,6 +82,7 @@ async function fetchNovosPedidos() {
     }
 
     ultimaBusca = moment(); // Atualiza o timestamp da última busca
+    primeiraExecucao = false; // Marca que a primeira execução já ocorreu
     return pedidos;
 }
 
